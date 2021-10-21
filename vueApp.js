@@ -11,6 +11,5 @@ const url = "https://services7.arcgis.com/mOBPykOjAyBO2ZKk/arcgis/rest/services/
                         return {GEN: result.attributes.GEN, cases: result.attributes.cases7_per_100k};
                     }
                   )})
-                  
-                }
+                 }
               });
