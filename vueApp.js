@@ -2,7 +2,7 @@ const url = "https://services7.arcgis.com/mOBPykOjAyBO2ZKk/arcgis/rest/services/
 
         const vm = new Vue({
                 el: '#app',
-                data: {
+                data () {
                 results: []
                 },
                 mounted() {
