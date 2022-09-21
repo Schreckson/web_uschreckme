@@ -2,21 +2,9 @@ const url = "https://services7.arcgis.com/mOBPykOjAyBO2ZKk/arcgis/rest/services/
 
         const vm = new Vue({
               el: '#app',
-              data: {
-              results: []
-              },
-              mounted() {
-                axios.get(url).then(response => {
-                  this.results = response.data.features.map((result) => {
-                    return {GEN: result.attributes.GEN, cases: result.attributes.cases7_per_100k};
-                  }
-                )})
-                }
-            });
-        var vue_det = new Vue({
-              el: '#intro',
                 data: {
-                   timestamp: ""
+                   timestamp: "",
+                   results: []
                 },
                 created() {
                     setInterval(this.getNow, 1000);
@@ -27,6 +15,13 @@ const url = "https://services7.arcgis.com/mOBPykOjAyBO2ZKk/arcgis/rest/services/
                         const date = today.getDate()+'.'+(today.getMonth()+1)+'.'+today.getFullYear();
                         this.timestamp = date;
                     }
-                }
+                },
+                mounted() {
+                  axios.get(url).then(response => {
+                    this.results = response.data.features.map((result) => {
+                      return {GEN: result.attributes.GEN, cases: result.attributes.cases7_per_100k};
+                    }
+                  )})
+                  }
              });
         
