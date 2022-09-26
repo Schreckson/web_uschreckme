@@ -19,9 +19,8 @@ const url = "https://services7.arcgis.com/mOBPykOjAyBO2ZKk/arcgis/rest/services/
                 mounted() {
                   axios.get(url).then(response => {
                     this.results = response.data.features.map((result) => {
-                      return {GEN: result.attributes.GEN, cases: result.attributes.cases7_per_100k};
+                      return {GEN: result.attributes.GEN, CASES: result.attributes.cases7_per_100k};
                     }
                   )})
                   }
              });
-        
