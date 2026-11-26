@@ -1,33 +1,209 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="x-ua-compatible" content="ie=edge">  
-  <title>Inzidenz fuer ausgewaehlte Landkreise</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/foundation-sites@6.7.5/dist/css/foundation.min.css" crossorigin="anonymous">
-  <link rel="shortcut icon" type="image/x-icon" href="favicon.png">
-</head>
-<body>        
-<div class="grid-container" id="app">
-<div class="title">
-  <h5 class="text-center">Inzidenz fuer ausgewaehlte Kreise {{ timestamp }}</h5>
-  </div>
-  <div class="grid-x grid-padding-x">  
-    <div class="cell small-6" v-for="(result, index) in results">     
-        <div class="card">
-            <div class="card-divider">
-              <h6>{{ result.GEN }}</h6>
-            </div>   
-          <div class="card-section">   
-              <p>{{ Math.round(result.CASES) }}</p>
-            </div>
-        </div>  
-      </div>  
-  </div>
-</div>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Aktuelle COVID-19-7-Tage-Inzidenz für Deutschland">
+  <title>COVID-19-Inzidenz Deutschland</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, sans-serif;
+      color: #17212b;
+      background: #f3f6f8;
+    }
 
-    <script src="https://cdn.jsdelivr.net/npm/vue@2">
-    <script src="https://cdn.jsdelivr.net/npm/axios@1.14.0/dist/axios.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/foundation-sites@6.7.5/dist/js/foundation.min.js" crossorigin="anonymous"></script>
-<script src="vueApp.js"></script>
-</body></html>
+    body {
+      display: grid;
+      min-height: 100vh;
+      margin: 0;
+      place-items: center;
+    }
+
+    main {
+      width: min(90vw, 34rem);
+      padding: 2rem;
+      border-radius: 0.75rem;
+      background: white;
+      box-shadow: 0 0.5rem 1.5rem #17212b1a;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    #incidence {
+      margin: 0.5rem 0;
+      font-size: clamp(3rem, 12vw, 5rem);
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    #status {
+      margin: 0;
+      color: #526170;
+    }
+
+    .source {
+      margin: 1.5rem 0 0;
+      font-size: 0.8rem;
+    }
+
+    a {
+      color: #145a86;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Deutschland</h1>
+    <p id="incidence" aria-live="polite">--</p>
+    <p id="status" role="status">7-Tage-Inzidenz pro 100.000 Einwohner:innen wird geladen.</p>
+    <p class="source">Quelle: <a href="https://github.com/robert-koch-institut/COVID-19_7-Tage-Inzidenz_in_Deutschland">Robert Koch-Institut</a> · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a></p>
+  </main>
+  <script>
+    const DATA_URL = 'https://raw.githubusercontent.com/robert-koch-institut/COVID-19_7-Tage-Inzidenz_in_Deutschland/main/COVID-19-Faelle_7-Tage-Inzidenz_Deutschland.csv';
+
+    function parseCsv(text) {
+      const rows = [];
+      let row = [];
+      let field = '';
+      let quoted = false;
+
+      for (let index = 0; index < text.length; index += 1) {
+        const character = text[index];
+
+        if (quoted) {
+          if (character === '"') {
+            if (text[index + 1] === '"') {
+              field += '"';
+              index += 1;
+            } else {
+              quoted = false;
+            }
+          } else {
+            field += character;
+          }
+          continue;
+        }
+
+        if (character === '"' && field.length === 0) {
+          quoted = true;
+        } else if (character === ',') {
+          row.push(field);
+          field = '';
+        } else if (character === '\n') {
+          row.push(field.replace(/\r$/, ''));
+          rows.push(row);
+          row = [];
+          field = '';
+        } else {
+          field += character;
+        }
+      }
+
+      if (quoted) {
+        throw new Error('Malformed CSV: unterminated quoted field.');
+      }
+
+      if (field.length > 0 || row.length > 0) {
+        row.push(field.replace(/\r$/, ''));
+        rows.push(row);
+      }
+
+      return rows;
+    }
+
+    function isIsoDate(value) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return false;
+      }
+
+      const parsed = new Date(`${value}T00:00:00Z`);
+      return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+    }
+
+    function selectLatest(csv) {
+      const rows = parseCsv(csv.replace(/^\uFEFF/, ''));
+      const headers = rows.shift();
+
+      if (!headers) {
+        throw new Error('The CSV is empty.');
+      }
+
+      const dateIndex = headers.indexOf('Meldedatum');
+      const ageIndex = headers.indexOf('Altersgruppe');
+      const incidenceIndex = headers.indexOf('Inzidenz_7-Tage');
+
+      if ([dateIndex, ageIndex, incidenceIndex].some((index) => index < 0)) {
+        throw new Error('The CSV is missing required columns.');
+      }
+
+      const allAges = rows
+        .filter((values) => values[ageIndex] === '00+')
+        .map((values) => {
+          if (!isIsoDate(values[dateIndex] || '')) {
+            throw new Error('The CSV contains an invalid all-ages report date.');
+          }
+
+          return {
+            date: values[dateIndex],
+            incidenceText: values[incidenceIndex] || ''
+          };
+        });
+
+      if (allAges.length === 0) {
+        throw new Error('The CSV has no all-ages rows.');
+      }
+
+      const latestDate = allAges.reduce(
+        (latest, record) => record.date > latest ? record.date : latest,
+        allAges[0].date
+      );
+      const latestRows = allAges.filter((record) => record.date === latestDate);
+
+      if (latestRows.length !== 1) {
+        throw new Error('The latest all-ages row is duplicated.');
+      }
+
+      const incidence = Number(latestRows[0].incidenceText);
+      if (latestRows[0].incidenceText === '' || !Number.isFinite(incidence) || incidence < 0) {
+        throw new Error('The latest all-ages incidence is invalid.');
+      }
+
+      return { date: latestDate, incidence };
+    }
+
+    async function loadCurrent(fetcher = globalThis.fetch, url = DATA_URL) {
+      const response = await fetcher(url, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`RKI request failed (HTTP ${response.status}).`);
+      }
+
+      return selectLatest(await response.text());
+    }
+
+    window.GermanyIncidence = { selectLatest, loadCurrent };
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const incidenceElement = document.getElementById('incidence');
+      const statusElement = document.getElementById('status');
+
+      try {
+        const latest = await loadCurrent();
+        incidenceElement.textContent = new Intl.NumberFormat('de-DE', {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1
+        }).format(latest.incidence);
+        statusElement.textContent = '7-Tage-Inzidenz pro 100.000 Einwohner:innen';
+      } catch (error) {
+        console.error('Could not load the current RKI incidence.', error);
+        incidenceElement.textContent = '--';
+        statusElement.textContent = 'Aktuelle Daten sind derzeit nicht verfügbar.';
+      }
+    });
+  </script>
+</body>
+</html>
